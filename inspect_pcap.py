@@ -1,20 +1,30 @@
 from __future__ import print_function
+import json
 import os
+import urllib
 import urllib2
 
 import boto3
 from scapy.all import rdpcap, Ether  
 
 
-def handler(event, context):  
-    # Create a temporary file
-    pcap_file = open('/tmp/temp.pcap', 'wb')
+def handler(event, context):
+    # Log the event
+    print('Received event: {}'.format(json.dumps(event)))
+    # Extract the bucket and key (from AWS 's3-get-object-python' example)
+    #bucket = event['Records'][0]['s3']['bucket']['name']
+    #key = urllib.unquote_plus(event['Records'][0]['s3']['object']['key'].encode('utf8'))
+    try:
+        # Create a temporary file
+        pcap_file = open('/tmp/temp.pcap', 'wb')
 
-    # Download the PCAP from S3
-    s3 = boto3.resource('s3')
-    s3.Object('uploaded-pcaps', 'wget_google.pcap').download_file(
+        # Download the PCAP from S3
+        s3 = boto3.resource('s3')
+        s3.Object('uploaded-pcaps', 'wget_google.pcap').download_file(
         pcap_file.name)
-    pcap_file.close()
+        pcap_file.close()
+    except Exception:
+        print('Error getting object {} from the {} bucket'.format(key, bucket))
 
     # Load PCAP file
     pcap = rdpcap(pcap_file.name)
