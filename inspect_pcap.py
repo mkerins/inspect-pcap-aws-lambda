@@ -12,16 +12,16 @@ def handler(event, context):
     # Log the event
     print('Received event: {}'.format(json.dumps(event)))
     # Extract the bucket and key (from AWS 's3-get-object-python' example)
-    #bucket = event['Records'][0]['s3']['bucket']['name']
-    #key = urllib.unquote_plus(event['Records'][0]['s3']['object']['key'].encode('utf8'))
+    bucket = event['Records'][0]['s3']['bucket']['name']
+    key = urllib.unquote_plus(event['Records'][0]['s3']['object']['key'].encode('utf8'))
     try:
         # Create a temporary file
         pcap_file = open('/tmp/temp.pcap', 'wb')
 
         # Download the PCAP from S3
         s3 = boto3.resource('s3')
-        s3.Object('uploaded-pcaps', 'wget_google.pcap').download_file(
-        pcap_file.name)
+        s3.Object(bucket, key).download_file(
+            pcap_file.name)
         pcap_file.close()
     except Exception:
         print('Error getting object {} from the {} bucket'.format(key, bucket))
@@ -33,12 +33,16 @@ def handler(event, context):
 
     # Iterate over each packet in the PCAP file
     for pkt in pcap:
-        # Get the source and destination MAC addresses
-        src_mac = pkt.getlayer(Ether).src
-        dst_mac = pkt.getlayer(Ether).dst
-        # Add them to the set of MAC addresses
-        mac_addresses.add(src_mac)
-        mac_addresses.add(dst_mac)
+        try:
+            # Get the source and destination MAC addresses
+            src_mac = pkt.getlayer(Ether).src
+            dst_mac = pkt.getlayer(Ether).dst
+            # Add them to the set of MAC addresses
+            mac_addresses.add(src_mac)
+            mac_addresses.add(dst_mac)
+        except:
+            print('Could not extract MAC addresses')
+            continue
 
     print('Found {} MAC addresses'.format(len(mac_addresses)))
 
