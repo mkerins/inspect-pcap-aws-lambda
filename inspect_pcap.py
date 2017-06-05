@@ -5,29 +5,44 @@ import urllib
 import urllib2
 
 import boto3
+from botocore.exceptions import ClientError
 from scapy.all import rdpcap, Ether  
+from scapy.error import Scapy_Exception
+
+TEMP_FILE = '/tmp/temp.pcap'
 
 
 def handler(event, context):
+    # Check to see an event of type dict was received
+    if event is None or type(event) is not dict:
+        raise TypeError('No event received or event is improperly formatted')
     # Log the event
     print('Received event: {}'.format(json.dumps(event)))
+
     # Extract the bucket and key (from AWS 's3-get-object-python' example)
     bucket = event['Records'][0]['s3']['bucket']['name']
     key = urllib.unquote_plus(event['Records'][0]['s3']['object']['key'].encode('utf8'))
+
     try:
         # Create a temporary file
-        pcap_file = open('/tmp/temp.pcap', 'wb')
-
+        pcap_file = open(TEMP_FILE, 'wb')
         # Download the PCAP from S3
         s3 = boto3.resource('s3')
         s3.Object(bucket, key).download_file(
             pcap_file.name)
         pcap_file.close()
-    except Exception:
+    except ClientError:
         print('Error getting object {} from the {} bucket'.format(key, bucket))
+        os.remove(TEMP_FILE)
+        raise
 
     # Load PCAP file
-    pcap = rdpcap(pcap_file.name)
+    try:
+        pcap = rdpcap(pcap_file.name)
+    except Scapy_Exception:
+        print('{} is not a valid PCAP file'.format(key))
+        os.remove(TEMP_FILE)
+        raise
 
     mac_addresses = set()
 
@@ -59,8 +74,6 @@ def handler(event, context):
             print('The manufacturer for {} was not found'.format(mac))
             continue
 
-    # Delete the temporary file
-    os.remove(pcap_file.name)
 
 if __name__ == '__main__':  
     handler(event=None, context=None)
