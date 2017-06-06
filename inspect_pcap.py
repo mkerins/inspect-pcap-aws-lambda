@@ -10,18 +10,25 @@ from scapy.all import rdpcap, Ether
 from scapy.error import Scapy_Exception
 
 TEMP_FILE = '/tmp/temp.pcap'
+MAX_SIZE = 1024**2
 
 
 def handler(event, context):
     # Check to see an event of type dict was received
     if event is None or type(event) is not dict:
-        raise TypeError('No event received or event is improperly formatted')
+        print('No event received or event is improperly formatted')
+        raise TypeError
     # Log the event
     print('Received event: {}'.format(json.dumps(event)))
 
     # Extract the bucket and key (from AWS 's3-get-object-python' example)
     bucket = event['Records'][0]['s3']['bucket']['name']
     key = urllib.unquote_plus(event['Records'][0]['s3']['object']['key'].encode('utf8'))
+    size = event['Records'][0]['s3']['object']['size']
+
+    if size > MAX_SIZE:
+        print('PCAP file {} is too big ({} > {})'.format(key, size, MAX_SIZE))
+        raise Exception
 
     try:
         # Create a temporary file
@@ -61,19 +68,26 @@ def handler(event, context):
 
     print('Found {} MAC addresses'.format(len(mac_addresses)))
 
+    known_ouis = {}
+
     # Iterate over the set() of MAC addresses
     for mac in mac_addresses:
+        # Get the first 24 bits (aka the OUI) of the mac address
+        oui = mac[0:8]
+        # Check if we've already looked up this OUI
+        if oui in known_ouis:
+            print('{} -> {}*'.format(mac, known_ouis[oui]))
+            continue
         # Attempt to look up the manufacturer
         try:
             resp = urllib2.urlopen('http://api.macvendors.com/{}'.format(mac))
             if resp.getcode() == 200:
                 vendor_str = resp.readline()
-                print('{} is a {} network interface'.format(mac, vendor_str))
+                # Add this to our dict of known OUIs
+                known_ouis[oui] = vendor_str
+                print('{} -> {}'.format(mac, vendor_str))
         # Handle not found queries
         except urllib2.HTTPError:
-            print('The manufacturer for {} was not found'.format(mac))
-            continue
-
-
-if __name__ == '__main__':  
-    handler(event=None, context=None)
+            # Add the 'Unknown' OUI
+            known_ouis[oui] = 'Unknown'
+            print('{} -> {}'.format(mac, known_ouis[oui]))

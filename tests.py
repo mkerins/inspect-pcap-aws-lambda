@@ -1,5 +1,4 @@
 import unittest
-import boto3
 from botocore.exceptions import ClientError
 from scapy.error import Scapy_Exception
 
@@ -17,7 +16,7 @@ S3_PUT = {
             "object": {
                 "eTag": "0123456789abcdef0123456789abcdef",
                 "sequencer": "0A1B2C3D4E5F678901",
-                "key": "file.pcap",
+                "key": "secret_email_server.pcap",
                 "size": 0
             },
             "bucket": {
@@ -70,10 +69,16 @@ class TestInspectPcap(unittest.TestCase):
         with self.assertRaises(Scapy_Exception):
             handler(event=not_pcap, context=None)
 
-    def test_problem_mac_addresses(self):
-        problem_macs = S3_PUT
-        problem_macs['Records'][0]['s3']['object']['key'] = 'problem_mac_addresses.pcap'
-        handler(event=problem_macs, context=None)
+    def test_invalid_mac_addresses(self):
+        invalid_macs = S3_PUT
+        invalid_macs['Records'][0]['s3']['object']['key'] = 'problem_mac_addresses.pcap'
+        handler(event=invalid_macs, context=None)
+
+    def test_pcap_too_big(self):
+        pcap_too_big = S3_PUT
+        pcap_too_big['Records'][0]['s3']['object']['size'] = 1024**2 + 1
+        with self.assertRaises(Exception):
+            handler(event=pcap_too_big, context=None)
 
 
 if __name__ == '__main__':
